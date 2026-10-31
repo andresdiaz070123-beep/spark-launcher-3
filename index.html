@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Spark Go Sport HUD - Andres Diaz</title>
+<style>
+  :root {
+    --bg-deep: #030712;
+    --glass-border: rgba(0, 242, 254, 0.24);
+    --cyan-fresh: #00f2fe;
+    --blue-neon: #4facfe;
+    --red-spark: #ff2a54;
+    --text-white: #f8fafc;
+    --text-dim: #94a3b8;
+    --ok: #10b981;
+    --warn: #f59e0b;
+    --danger: #ef4444;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; user-select: none; }
+  
+  body {
+    background: radial-gradient(circle at 50% 0%, #112240 0%, var(--bg-deep) 75%);
+    color: var(--text-white);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 6px 12px;
+  }
+
+  /* Barra Superior */
+  .top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 2px 8px 6px;
+    font-size: 12px;
+  }
+  .user-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 900;
+    font-size: 14px;
+    color: #fff;
+    cursor: pointer;
+  }
+  .pulse-dot {
+    width: 9px;
+    height: 9px;
+    background: var(--red-spark);
+    border-radius: 50%;
+    box-shadow: 0 0 10px var(--red-spark);
+  }
+  .edit-mini { font-size: 10px; color: var(--cyan-fresh); border: 1px solid rgba(0,242,254,0.4); padding: 1px 6px; border-radius: 6px; }
+  
+  .top-clock {
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--cyan-fresh);
+    letter-spacing: 0.5px;
+    text-transform: capitalize;
+  }
+
+  .top-right-group { display: flex; align-items: center; gap: 8px; }
+  .col-plate-mini {
+    background: linear-gradient(180deg, #ffde00 0%, #f5b700 100%);
+    color: #0a0a0a;
+    padding: 2px 9px;
+    border-radius: 6px;
+    border: 2px solid #111;
+    font-size: 13px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    font-family: 'Arial Black', sans-serif;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  }
+  .pico-pill {
+    padding: 3px 12px;
+    border-radius: 30px;
+    font-weight: 800;
+    font-size: 11px;
+    border: 1px solid rgba(255,255,255,0.15);
+  }
+
+  /* Cuadrícula Principal */
+  .dashboard {
+    display: grid;
+    grid-template-columns: 1.02fr 1.42fr 1.12fr;
+    gap: 10px;
+    flex: 1;
+    min-height: 0;
+    margin-bottom: 6px;
+  }
+
+  .card {
+    background: linear-gradient(160deg, rgba(20, 34, 61, 0.88) 0%, rgba(8, 14, 28, 0.95) 100%);
+    border-radius: 18px;
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    border: 1px solid var(--glass-border);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.65);
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* COLUMNA IZQUIERDA: Mapa en Vivo + Documentos */
+  .panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 5px;
+  }
+  .panel-title {
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--cyan-fresh);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .header-btns { display: flex; gap: 4px; }
+  .btn-top-mini {
+    background: rgba(0, 242, 254, 0.15);
+    border: 1px solid var(--cyan-fresh);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+
+  .map-live-box {
+    width: 100%;
+    flex: 1;
+    background: #071324;
+    border-radius: 12px;
+    border: 1px solid rgba(0, 242, 254, 0.35);
+    overflow: hidden;
+    position: relative;
+    margin-bottom: 6px;
+  }
+  .map-frame {
+    width: 100%;
+    height: 100%;
+    border: none;
+    filter: invert(90%) hue-rotate(180deg) brightness(95%) contrast(90%);
+  }
+
+  .docs-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .doc-mini {
+    background: rgba(255, 255, 255, 0.04);
+    padding: 5px 8px;
+    border-radius: 10px;
+    border-left: 3px solid var(--ok);
+    cursor: pointer;
+  }
+  .doc-mini h4 { font-size: 8px; color: var(--text-dim); text-transform: uppercase; }
+  .doc-mini .days { font-size: 12px; font-weight: 900; }
+  .doc-mini .date { font-size: 8px; color: var(--text-dim); }
+
+  /* COLUMNA CENTRAL: Velocímetro Limpio + Spark Go Más Grande */
+  .center-showroom {
+    background: radial-gradient(circle at 50% 52%, rgba(0, 242, 254, 0.18) 0%, rgba(255, 42, 84, 0.12) 52%, rgba(5, 10, 22, 0.98) 95%);
+    border: 1px solid rgba(0, 242, 254, 0.42);
+    padding: 4px 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0px;
+  }
+
+  /* Contenedor del Velocímetro Redondo Sin Borde Metálico */
+  .gauge-stage {
+    width: 100%;
+    height: 46%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    z-index: 3;
+    margin-bottom: -12px;
+  }
+  .gauge-svg {
+    height: 108%;
+    width: auto;
+    max-width: 95%;
+    filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.8)) drop-shadow(0 0 14px rgba(0, 242, 254, 0.22));
+  }
+
+  /* Contenedor del Carro Más Grande que el Velocímetro */
+  .car-pedestal {
+    width: 100%;
+    height: 54%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    min-height: 0;
+  }
+  .neon-ring {
+    position: absolute;
+    bottom: 6px;
+    width: 92%;
+    height: 26px;
+    background: radial-gradient(ellipse at center, rgba(0, 242, 254, 0.65) 0%, rgba(255, 42, 84, 0.45) 50%, transparent 76%);
+    border-radius: 50%;
+    border-bottom: 2px solid var(--cyan-fresh);
+    z-index: 1;
+  }
+  .car-hero-img {
+    width: 100%;
+    height: 100%;
+    max-height: 220px;
+    object-fit: contain;
+    filter: drop-shadow(0 14px 20px rgba(0,0,0,0.92)) drop-shadow(0 0 15px rgba(255,42,84,0.32));
+    z-index: 2;
+    transform: scale(1.24);
+  }
+
+  /* COLUMNA DERECHA: Video USB */
+  .video-screen-box {
+    width: 100%;
+    flex: 1;
+    background: #000;
+    border-radius: 12px;
+    border: 1px solid rgba(0, 242, 254, 0.35);
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  video#usb-video-player {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: none;
+  }
+  .video-empty-state {
+    text-align: center;
+    padding: 12px;
+    color: var(--text-dim);
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .video-empty-state b { display: block; color: var(--cyan-fresh); font-size: 13px; margin-top: 4px; }
+
+  .video-ctrls-bar {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    background: rgba(255,255,255,0.05);
+    padding: 5px 8px;
+    border-radius: 10px;
+    margin-top: 6px;
+  }
+  .v-btn {
+    background: rgba(255,255,255,0.1);
+    border: none;
+    color: #fff;
+    width: 34px;
+    height: 30px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .v-btn.play-main {
+    background: linear-gradient(135deg, var(--red-spark), #be123c);
+    width: 46px;
+    font-weight: bold;
+  }
+
+  /* Barra Inferior */
+  .bottom-bar {
+    height: 46px;
+    background: rgba(11, 19, 38, 0.94);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 10px;
+    border: 1px solid var(--glass-border);
+  }
+  .pill-btn {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #e2e8f0;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 7px 11px;
+    border-radius: 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .pill-btn.aa-bottom {
+    background: linear-gradient(135deg, #0284c7, #2563eb);
+    border-color: var(--cyan-fresh);
+    color: #fff;
+    font-weight: 900;
+    box-shadow: 0 0 12px rgba(0, 242, 254, 0.3);
+  }
+  .pill-btn:active { background: var(--cyan-fresh); color: #000; }
+
+  /* Modal Ajustes */
+  .modal { display: none; position: fixed; inset: 0; background: rgba(2, 6, 23, 0.88); align-items: center; justify-content: center; z-index: 100; }
+  .modal-box {
+    background: #0f172a;
+    padding: 16px 20px;
+    border-radius: 18px;
+    width: 400px;
+    border: 1px solid var(--cyan-fresh);
+  }
+  .modal-box h3 { margin-bottom: 10px; font-size: 14px; color: var(--cyan-fresh); text-transform: uppercase; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .field label { display: block; font-size: 11px; color: var(--text-dim); margin-bottom: 3px; }
+  .field input { width: 100%; padding: 7px 9px; border-radius: 8px; border: 1px solid #334155; background: #030712; color: #fff; font-size: 13px; font-weight: 700; }
+  .modal-actions { display: flex; gap: 10px; margin-top: 14px; }
+  .modal-actions button { flex: 1; padding: 9px; border-radius: 10px; border: none; font-weight: 800; cursor: pointer; }
+  .btn-ok { background: linear-gradient(90deg, var(--cyan-fresh), var(--blue-neon)); color: #000; }
+  .btn-cancel { background: #334155; color: #fff; }
+</style>
+</head>
+<body>
+
+  <!-- Barra Superior -->
+  <div class="top-bar">
+    <div class="user-pill" onclick="abrirAjustes()">
+      <span class="pulse-dot"></span> Hola, <span id="user-name-label">Andres Diaz</span>
+      <span class="edit-mini">✎</span>
+    </div>
+    <div class="top-clock">
+      <span id="clock">00:00</span> • <span id="date">Cargando...</span>
+    </div>
+    <div class="top-right-group">
+      <div class="col-plate-mini" id="plate-text" onclick="abrirAjustes()">CYK 160</div>
+      <div id="pico-placa-status" class="pico-pill">Verificando...</div>
+    </div>
+  </div>
+
+  <!-- Tablero Principal -->
+  <div class="dashboard">
+    
+    <!-- COLUMNA IZQUIERDA: Mapa Abierto + Documentos -->
+    <div class="card">
+      <div class="panel-header">
+        <span class="panel-title">📍 Mapa en Vivo</span>
+        <div class="header-btns">
+          <button class="btn-top-mini" onclick="centrarMapaGPS()">🔄 GPS</button>
+          <button class="btn-top-mini" onclick="abrirAppNativa('Maps')">⛶ App Maps</button>
+        </div>
+      </div>
+
+      <div class="map-live-box">
+        <iframe id="live-map-frame" class="map-frame" src="https://www.openstreetmap.org/export/embed.html?bbox=-74.15,4.58,-74.02,4.72&layer=mapnik&marker=4.65,-74.08"></iframe>
+      </div>
+
+      <div class="docs-row">
+        <div class="doc-mini" id="soat-card" onclick="abrirAjustes()">
+          <h4>🛡️ SOAT</h4>
+          <div class="days" id="soat-days">-- días</div>
+          <div class="date" id="soat-date">28/08/2027</div>
+        </div>
+        <div class="doc-mini" id="tecno-card" onclick="abrirAjustes()">
+          <h4>🔧 Tecno</h4>
+          <div class="days" id="tecno-days">-- días</div>
+          <div class="date" id="tecno-date">29/08/2027</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- COLUMNA CENTRAL: Velocímetro Circular sin Bisel Metálico + Spark Go Gigante -->
+    <div class="card center-showroom">
+      
+      <!-- Velocímetro Limpio con Escala Normal Simétrica (0 a 180 km/h) y Número Central -->
+      <div class="gauge-stage">
+        <svg viewBox="0 0 220 220" class="gauge-svg">
+          <defs>
+            <!-- Fondo Azul Petróleo Iluminado -->
+            <radialGradient id="dialFace" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#123e54"/>
+              <stop offset="68%" stop-color="#092332"/>
+              <stop offset="100%" stop-color="#041018"/>
+            </radialGradient>
+            <!-- Brillo para la aguja -->
+            <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="2" result="blur"/>
+              <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+            </filter>
+          </defs>
+
+          <!-- Anillo Exterior de Cristal Oscuro y Borde Cian (Sin bisel metálico) -->
+          <circle cx="110" cy="110" r="102" fill="url(#dialFace)" stroke="rgba(0, 242, 254, 0.35)" stroke-width="2.5"/>
+          <circle cx="110" cy="110" r="97" fill="none" stroke="rgba(255, 255, 255, 0.08)" stroke-width="1"/>
+
+          <!-- Arco de Escala Simétrico Normal (-135° a +135° = 270°) -->
+          <circle cx="110" cy="110" r="90" fill="none" stroke="rgba(0, 242, 254, 0.35)" stroke-width="3.5"
+                  stroke-dasharray="424 566" transform="rotate(135 110 110)" stroke-linecap="round"/>
+          <!-- Zona Roja de Alta Velocidad (140 a 180 km/h) -->
+          <circle cx="110" cy="110" r="90" fill="none" stroke="#ff2a54" stroke-width="4"
+                  stroke-dasharray="94 566" stroke-dashoffset="-330" transform="rotate(135 110 110)" stroke-linecap="round"/>
+
+          <!-- Líneas y Números de Velocímetro Normal (0 a 180 km/h) -->
+          <g id="gauge-ticks"></g>
+
+          <!-- Aguja Indicadora Dinámica -->
+          <g id="speed-needle" transform="rotate(-135 110 110)" filter="url(#glow)">
+            <polygon points="107,110 113,110 111,22 109,22" fill="#ffffff"/>
+            <polygon points="108.5,62 111.5,62 110.5,22 109.5,22" fill="#ff2a54"/>
+          </g>
+
+          <!-- Anillo y Centro Digital (Conservando el número de la velocidad) -->
+          <circle cx="110" cy="110" r="40" fill="#071d2b" stroke="#00f2fe" stroke-width="2" stroke-dasharray="190 70" transform="rotate(135 110 110)"/>
+          <circle cx="110" cy="110" r="35" fill="#05141f"/>
+
+          <!-- Número de Velocidad Central -->
+          <text x="110" y="117" id="speed" text-anchor="middle" fill="#ffffff" font-size="32" font-weight="900" font-family="Segoe UI, sans-serif">0</text>
+          <text x="110" y="131" text-anchor="middle" fill="#00f2fe" font-size="9" font-weight="800" letter-spacing="1">km/h</text>
+        </svg>
+      </div>
+
+      <!-- Carro Más Grande Ocupando la Parte Inferior -->
+      <div class="car-pedestal">
+        <img src="spark_rojo.png" class="car-hero-img" alt="Chevrolet Spark Go">
+        <div class="neon-ring"></div>
+      </div>
+
+    </div>
+
+    <!-- COLUMNA DERECHA: Video USB -->
+    <div class="card">
+      <div class="panel-header">
+        <span class="panel-title" id="video-track-name">🎬 Video USB</span>
+        <div class="header-btns">
+          <button class="btn-top-mini" onclick="document.getElementById('usb-file-input').click()">📂 USB</button>
+          <button class="btn-top-mini" onclick="abrirAppNativa('Video')">📺 App</button>
+        </div>
+      </div>
+
+      <input type="file" id="usb-file-input" accept="video/*,audio/*" multiple style="display:none" onchange="cargarVideosUSB(this.files)">
+
+      <div class="video-screen-box">
+        <video id="usb-video-player" playsinline></video>
+        <div id="video-placeholder" class="video-empty-state" onclick="document.getElementById('usb-file-input').click()">
+          🎞️ Pantalla de Video Lista<br>
+          <b>Toca aquí o en 📂 USB</b>
+          para proyectar tus videos musicales
+        </div>
+      </div>
+
+      <div class="video-ctrls-bar">
+        <button class="v-btn" onclick="anteriorVideo()">⏮</button>
+        <button class="v-btn play-main" id="play-btn" onclick="pausarReproducirVideo()">▶</button>
+        <button class="v-btn" onclick="siguienteVideo()">⏭</button>
+        <button class="v-btn" onclick="pantallaCompletaVideo()">⛶</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Barra Inferior -->
+  <div class="bottom-bar">
+    <button class="pill-btn aa-bottom" onclick="abrirAppNativa('AndroidAuto')">🚘 Android Auto</button>
+    <button class="pill-btn" onclick="abrirAppNativa('Radio')">📻 Radio FM</button>
+    <button class="pill-btn" onclick="abrirAppNativa('BT música')">🎵 BT Música</button>
+    <button class="pill-btn" onclick="abrirAppNativa('Música')">🔌 Música USB</button>
+    <button class="pill-btn" onclick="abrirAppNativa('Ecualizador')">🎚️ Sonido EQ</button>
+    <button class="pill-btn" onclick="abrirAppNativa('Llamada BT')">📞 Teléfono</button>
+    <button class="pill-btn" onclick="abrirAjustes()">⚙️ Ajustes</button>
+  </div>
+
+  <!-- Modal Ajustes -->
+  <div class="modal" id="settings-modal">
+    <div class="modal-box">
+      <h3>⚙️ Personalizar Datos del Vehículo</h3>
+      <div class="form-grid">
+        <div class="field">
+          <label>Tu Nombre:</label>
+          <input type="text" id="input-name">
+        </div>
+        <div class="field">
+          <label>Placa del Carro:</label>
+          <input type="text" id="input-plate" style="text-transform:uppercase;">
+        </div>
+        <div class="field">
+          <label>Vencimiento SOAT:</label>
+          <input type="date" id="input-soat">
+        </div>
+        <div class="field">
+          <label>Vencimiento Tecnomecánica:</label>
+          <input type="date" id="input-tecno">
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-cancel" onclick="cerrarAjustes()">Cancelar</button>
+        <button class="btn-ok" onclick="guardarAjustes()">Guardar Cambios</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+  let nombreGuardado = localStorage.getItem('spark_user');
+  if (!nombreGuardado || nombreGuardado === "Carlos") {
+    nombreGuardado = "Andres Diaz";
+    localStorage.setItem('spark_user', "Andres Diaz");
+  }
+
+  let datosCarro = {
+    nombreUsuario: nombreGuardado,
+    placa: localStorage.getItem('spark_plate') || "CYK160",
+    vencimientoSOAT: localStorage.getItem('spark_soat') || "2027-08-28",
+    vencimientoTecno: localStorage.getItem('spark_tecno') || "2027-08-29"
+  };
+
+  // Dibujar líneas graduadas y números de velocímetro normal simétrico (-135° a +135°)
+  function dibujarEscalaVelocimetro() {
+    const grupo = document.getElementById('gauge-ticks');
+    let svgContent = '';
+    for (let v = 0; v <= 180; v += 5) {
+      const angulo = -135 + (v / 180) * 270;
+      const rad = (angulo - 90) * (Math.PI / 180);
+      const esMayor = (v % 20 === 0);
+      const esMedio = (v % 10 === 0 && !esMayor);
+
+      const rExt = 88;
+      const rInt = esMayor ? 77 : (esMedio ? 81 : 84);
+      const x1 = 110 + rExt * Math.cos(rad);
+      const y1 = 110 + rExt * Math.sin(rad);
+      const x2 = 110 + rInt * Math.cos(rad);
+      const y2 = 110 + rInt * Math.sin(rad);
+
+      const colorMarca = v >= 140 ? '#ff2a54' : (esMayor ? '#ffffff' : '#00f2fe');
+      const grosor = esMayor ? 2.6 : (esMedio ? 1.6 : 1);
+      const opacidad = esMayor ? 1 : (esMedio ? 0.85 : 0.5);
+
+      svgContent += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${colorMarca}" stroke-width="${grosor}" opacity="${opacidad}" stroke-linecap="round"/>`;
+
+      if (esMayor) {
+        const rTexto = 64;
+        const tx = 110 + rTexto * Math.cos(rad);
+        const ty = 110 + rTexto * Math.sin(rad) + 3.5;
+        const colorNum = v >= 140 ? '#ff2a54' : '#f8fafc';
+        svgContent += `<text x="${tx}" y="${ty}" fill="${colorNum}" font-size="11" font-weight="900" text-anchor="middle">${v}</text>`;
+      }
+    }
+    grupo.innerHTML = svgContent;
+  }
+
+  function actualizarAgujaVelocimetro(kmh) {
+    const vel = Math.max(0, Math.min(180, kmh));
+    const angulo = -135 + (vel / 180) * 270;
+    document.getElementById('speed').textContent = Math.round(kmh);
+    document.getElementById('speed-needle').setAttribute('transform', `rotate(${angulo} 110 110)`);
+  }
+
+  function centrarMapaGPS() {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(function(pos) {
+        const lat = pos.coords.latitude;
+        const lon = pos.coords.longitude;
+        const d = 0.015;
+        document.getElementById('live-map-frame').src =
+          `https://www.openstreetmap.org/export/embed.html?bbox=${lon-d},${lat-d},${lon+d},${lat+d}&layer=mapnik&marker=${lat},${lon}`;
+      });
+    }
+  }
+
+  let listaVideos = [];
+  let indiceVideo = 0;
+  const vPlayer = document.getElementById('usb-video-player');
+  const vPlaceholder = document.getElementById('video-placeholder');
+  const vTitle = document.getElementById('video-track-name');
+  const playBtn = document.getElementById('play-btn');
+
+  function cargarVideosUSB(archivos) {
+    if (!archivo
